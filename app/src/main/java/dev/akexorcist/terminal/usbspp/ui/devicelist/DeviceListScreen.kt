@@ -171,7 +171,7 @@ private fun DeviceListScreenContent(
     }
 }
 
-private const val SOURCE_CODE_URL = "https://example.com/source-code"
+private const val SOURCE_CODE_URL = "https://github.com/akexorcist/android-usb-serial-terminal"
 
 @Composable
 private fun DeviceListOptionsMenu(onNavigateToLicense: () -> Unit) {
