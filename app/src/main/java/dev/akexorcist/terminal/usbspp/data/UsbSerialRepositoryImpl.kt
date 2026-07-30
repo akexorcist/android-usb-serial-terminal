@@ -219,14 +219,14 @@ class UsbSerialRepositoryImpl(private val context: Context) : SerialRepository {
   }
 }
 
-private fun Parity.toUsbParity(): Int =
+internal fun Parity.toUsbParity(): Int =
   when (this) {
     Parity.NONE -> UsbSerialPort.PARITY_NONE
     Parity.EVEN -> UsbSerialPort.PARITY_EVEN
     Parity.ODD -> UsbSerialPort.PARITY_ODD
   }
 
-private fun Int.toUsbStopBits(): Int =
+internal fun Int.toUsbStopBits(): Int =
   when (this) {
     2 -> UsbSerialPort.STOPBITS_2
     else -> UsbSerialPort.STOPBITS_1

@@ -369,7 +369,7 @@ private fun SerialConfigSelector(
     }
 }
 
-private fun Int.toHex(): String = "0x" + this.toString(16).uppercase().padStart(4, '0')
+internal fun Int.toHex(): String = "0x" + this.toString(16).uppercase().padStart(4, '0')
 
 private val previewDevices =
     listOf(

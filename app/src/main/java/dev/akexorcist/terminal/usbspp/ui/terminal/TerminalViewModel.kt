@@ -18,8 +18,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private const val MAX_HISTORY = 50
-private const val MAX_LINES = 2_000
+private const val MAX_HISTORY = 99
+private const val MAX_LINES = 99_999
 
 data class TerminalUiState(
   val connectionState: ConnectionState = ConnectionState.Disconnected,
@@ -65,7 +65,7 @@ class TerminalViewModel(private val repository: SerialRepository) : ViewModel() 
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TerminalUiState())
 
   init {
-    viewModelScope.launch { repository.incomingLines.collect { line -> lines.update { (it + line).takeLast(MAX_LINES) } } }
+    viewModelScope.launch { repository.incomingLines.collect { line -> lines.update { it.appendCapped(line, MAX_LINES) } } }
     viewModelScope.launch {
       repository.errors.collect { message -> eventsChannel.send(TerminalEvent.ShowError(message)) }
     }
@@ -76,8 +76,8 @@ class TerminalViewModel(private val repository: SerialRepository) : ViewModel() 
     viewModelScope.launch {
       try {
         val line = repository.send(text, lineEnding.value)
-        lines.update { (it + line).takeLast(MAX_LINES) }
-        sendHistory.update { (listOf(text) + it).take(MAX_HISTORY) }
+        lines.update { it.appendCapped(line, MAX_LINES) }
+        sendHistory.update { it.prependDistinctCapped(text, MAX_HISTORY) }
         eventsChannel.send(TerminalEvent.SendSucceeded)
       } catch (e: SerialIoException) {
         eventsChannel.send(TerminalEvent.ShowError(e.message ?: "Send failed"))
@@ -102,3 +102,8 @@ class TerminalViewModel(private val repository: SerialRepository) : ViewModel() 
     viewModelScope.launch { eventsChannel.send(TerminalEvent.NavigateBack) }
   }
 }
+
+internal fun <T> List<T>.appendCapped(item: T, maxSize: Int): List<T> = (this + item).takeLast(maxSize)
+
+internal fun <T> List<T>.prependDistinctCapped(item: T, maxSize: Int): List<T> =
+  (listOf(item) + filterNot { it == item }).take(maxSize)

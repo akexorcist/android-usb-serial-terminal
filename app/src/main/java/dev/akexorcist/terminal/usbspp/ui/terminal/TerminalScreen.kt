@@ -510,11 +510,11 @@ private fun ConnectionState.title(): String =
 internal fun isScrolledToBottom(lastVisibleIndex: Int, totalItemsCount: Int): Boolean =
     lastVisibleIndex >= totalItemsCount - 1
 
-private val timeFormatter = SimpleDateFormat("d MMM yy, HH:mm:ss.SSS", Locale.getDefault())
+private val timeFormatter = SimpleDateFormat("d MMM yy, HH:mm:ss.SSS", Locale.US)
 
-private fun Long.toTimeLabel(): String = timeFormatter.format(Date(this))
+internal fun Long.toTimeLabel(): String = timeFormatter.format(Date(this))
 
-private fun List<Byte>.toHexString(): String = joinToString(" ") { "%02X".format(it) }
+internal fun List<Byte>.toHexString(): String = joinToString(" ") { "%02X".format(it) }
 
 private fun previewLine(id: Long, text: String, direction: LineDirection): SerialLine =
     SerialLine(id = id, text = text, bytes = text.toByteArray().toList(), direction = direction, timestampMillis = id * 1_000L)
