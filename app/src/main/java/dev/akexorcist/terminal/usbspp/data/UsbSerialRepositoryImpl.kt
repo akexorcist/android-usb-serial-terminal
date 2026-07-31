@@ -126,7 +126,7 @@ class UsbSerialRepositoryImpl(private val dataSource: UsbDataSource) : SerialRep
         } catch (e: Exception) {
             cleanupPort()
             _connectionState.update { ConnectionState.Disconnected }
-            throw if (e is SerialConnectionException) e else SerialConnectionException(e.message ?: "Unable to open port")
+            throw e as? SerialConnectionException ?: SerialConnectionException(e.message ?: "Unable to open port")
         }
     }
 

@@ -51,10 +51,10 @@ fun LicenseScreen(onNavigateBack: () -> Unit, modifier: Modifier = Modifier) {
     ) { padding ->
         Column(
             modifier = Modifier
-              .fillMaxSize()
-              .padding(padding)
-              .verticalScroll(rememberScrollState())
-              .padding(16.dp),
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {

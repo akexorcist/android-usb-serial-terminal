@@ -28,17 +28,14 @@ class FakeUsbSerialPort(private val device: UsbDevice, private val readEndpoint:
     var setParametersException: IOException? = null
     var readException: IOException? = null
 
-    @Volatile private var open = false
+    @Volatile
+    private var open = false
 
     fun emitIncoming(data: ByteArray) {
         incomingData.put(data)
     }
 
-    /**
-     * Blocks the calling thread until the background read loop has dequeued everything queued
-     * via [emitIncoming] so far, for tests that need a deterministic point after which the
-     * repository has observed the injected bytes (rather than a fixed sleep).
-     */
+    /** Deterministic alternative to a fixed sleep for awaiting bytes queued via [emitIncoming]. */
     fun awaitIncomingDrained(timeoutMillis: Long = 2_000) {
         val deadlineNanos = System.nanoTime() + timeoutMillis * 1_000_000
         while (incomingData.isNotEmpty()) {

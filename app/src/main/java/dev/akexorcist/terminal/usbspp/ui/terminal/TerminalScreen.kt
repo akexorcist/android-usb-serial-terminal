@@ -1,16 +1,20 @@
 package dev.akexorcist.terminal.usbspp.ui.terminal
 
+import android.content.ClipData
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -26,7 +30,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -48,18 +52,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
-import android.content.ClipData
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -86,13 +82,12 @@ import kotlinx.datetime.format.MonthNames
 import kotlinx.datetime.format.Padding
 import kotlinx.datetime.format.char
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Instant
 import org.koin.androidx.compose.koinViewModel
+import kotlin.time.Instant
 
 @Composable
 fun TerminalScreen(
     viewModel: TerminalViewModel = koinViewModel(),
-    modifier: Modifier = Modifier,
     onNavigateBack: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -104,7 +99,7 @@ fun TerminalScreen(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is TerminalEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
+                is TerminalEvent.ShowError -> coroutineScope.launch { snackbarHostState.showSnackbar(event.message) }
                 TerminalEvent.NavigateBack -> onNavigateBack()
                 TerminalEvent.SendSucceeded -> inputText = ""
             }
@@ -127,13 +122,13 @@ fun TerminalScreen(
         onToggleHexMode = viewModel::toggleHexMode,
         onLineEndingSelected = viewModel::setLineEnding,
         onSend = viewModel::sendText,
-        modifier = modifier,
     )
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun TerminalScreenContent(
+    modifier: Modifier = Modifier,
     uiState: TerminalUiState,
     inputText: String,
     onInputTextChange: (String) -> Unit,
@@ -144,7 +139,6 @@ private fun TerminalScreenContent(
     onToggleHexMode: () -> Unit,
     onLineEndingSelected: (LineEnding) -> Unit,
     onSend: (String) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val lineCopiedMessage = stringResource(R.string.terminal_line_copied_message)
@@ -378,7 +372,12 @@ private fun ConsoleView(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConsoleLine(line: SerialLine, hexMode: Boolean, onCopied: () -> Unit, initiallyExpanded: Boolean = false) {
+private fun ConsoleLine(
+    line: SerialLine,
+    hexMode: Boolean,
+    initiallyExpanded: Boolean = false,
+    onCopied: () -> Unit,
+) {
     var expanded by remember(line.id) { mutableStateOf(initiallyExpanded) }
     val isSent = line.direction == LineDirection.SENT
     val clipboard = LocalClipboard.current
@@ -437,9 +436,9 @@ private fun ConsoleLine(line: SerialLine, hexMode: Boolean, onCopied: () -> Unit
 @Composable
 private fun SendBar(
     text: String,
-    onTextChange: (String) -> Unit,
     sendHistory: List<String>,
     enabled: Boolean,
+    onTextChange: (String) -> Unit,
     onSend: (String) -> Unit,
 ) {
     var historyExpanded by remember { mutableStateOf(false) }
@@ -535,8 +534,18 @@ internal fun Long.toTimeLabel(): String =
 
 internal fun List<Byte>.toHexString(): String = joinToString(" ") { "%02X".format(it) }
 
-private fun previewLine(id: Long, text: String, direction: LineDirection): SerialLine =
-    SerialLine(id = id, text = text, bytes = text.toByteArray().toList(), direction = direction, timestampMillis = id * 1_000L)
+private fun previewLine(
+    id: Long,
+    text: String,
+    direction: LineDirection,
+): SerialLine =
+    SerialLine(
+        id = id,
+        text = text,
+        bytes = text.toByteArray().toList(),
+        direction = direction,
+        timestampMillis = id * 1_000L,
+    )
 
 private val previewDevice =
     UsbDeviceInfo(

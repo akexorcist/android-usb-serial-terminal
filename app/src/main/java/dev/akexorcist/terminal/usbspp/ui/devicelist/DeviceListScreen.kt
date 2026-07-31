@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -41,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +59,7 @@ import dev.akexorcist.terminal.usbspp.domain.UsbDeviceInfo
 import dev.akexorcist.terminal.usbspp.theme.UsbSerialTerminalTheme
 import dev.akexorcist.terminal.usbspp.ui.common.SelectionBottomSheet
 import dev.akexorcist.terminal.usbspp.ui.common.SelectionBottomSheetContent
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import kotlin.random.Random
 
@@ -72,12 +72,13 @@ fun DeviceListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 DeviceListEvent.NavigateToTerminal -> onNavigateToTerminal()
-                is DeviceListEvent.ShowError -> snackbarHostState.showSnackbar(event.message)
+                is DeviceListEvent.ShowError -> coroutineScope.launch { snackbarHostState.showSnackbar(event.message) }
             }
         }
     }
@@ -214,7 +215,9 @@ private fun DeviceListOptionsMenuContent(
             text = { Text(stringResource(R.string.device_list_menu_source_code)) },
             onClick = onSourceCodeClick,
         )
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).padding(top = 4.dp)) {
+        Row(modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(top = 4.dp)) {
             Text(
                 text = stringResource(R.string.device_list_menu_app_version),
                 style = MaterialTheme.typography.labelMedium,

@@ -14,19 +14,19 @@ import androidx.core.view.WindowCompat
 import dev.akexorcist.terminal.usbspp.theme.UsbSerialTerminalTheme
 
 class MainActivity : ComponentActivity() {
-  override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-    enableEdgeToEdge()
-    setContent {
-      UsbSerialTerminalTheme {
-        val colorScheme = MaterialTheme.colorScheme
-        SideEffect {
-          WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars =
-            colorScheme.primary.luminance() > 0.5f
+        enableEdgeToEdge()
+        setContent {
+            UsbSerialTerminalTheme {
+                val colorScheme = MaterialTheme.colorScheme
+                SideEffect {
+                    WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars =
+                        colorScheme.primary.luminance() > 0.5f
+                }
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() }
+            }
         }
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() }
-      }
     }
-  }
 }

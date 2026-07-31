@@ -26,78 +26,78 @@ import dev.akexorcist.terminal.usbspp.theme.UsbSerialTerminalTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> SelectionBottomSheet(
-  title: String,
-  options: List<T>,
-  optionLabel: (T) -> String,
-  selected: T,
-  onSelected: (T) -> Unit,
-  onDismissRequest: () -> Unit,
+    title: String,
+    options: List<T>,
+    optionLabel: (T) -> String,
+    selected: T,
+    onSelected: (T) -> Unit,
+    onDismissRequest: () -> Unit,
 ) {
-  val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState()
 
-  ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState) {
-    SelectionBottomSheetContent(
-      title = title,
-      options = options,
-      optionLabel = optionLabel,
-      selected = selected,
-      onSelected = {
-        onSelected(it)
-        onDismissRequest()
-      },
-    )
-  }
+    ModalBottomSheet(onDismissRequest = onDismissRequest, sheetState = sheetState) {
+        SelectionBottomSheetContent(
+            title = title,
+            options = options,
+            optionLabel = optionLabel,
+            selected = selected,
+            onSelected = {
+                onSelected(it)
+                onDismissRequest()
+            },
+        )
+    }
 }
 
 @Composable
 fun <T> SelectionBottomSheetContent(
-  title: String,
-  options: List<T>,
-  optionLabel: (T) -> String,
-  selected: T,
-  onSelected: (T) -> Unit,
+    title: String,
+    options: List<T>,
+    optionLabel: (T) -> String,
+    selected: T,
+    onSelected: (T) -> Unit,
 ) {
-  Column(
-    modifier = Modifier
-      .padding(bottom = 16.dp)
-      .padding(horizontal = 16.dp)
-  ) {
-    Text(
-      text = title,
-      style = MaterialTheme.typography.titleMedium,
-      modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-    )
-    options.forEach { option ->
-      val isSelected = option == selected
-      val contentColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-      Row(
+    Column(
         modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(8.dp))
-          .clickable { onSelected(option) }
-          .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(text = optionLabel(option), style = MaterialTheme.typography.bodyLarge, color = contentColor)
-        if (isSelected) {
-          Icon(Icons.Filled.Check, contentDescription = null, tint = contentColor)
+          .padding(bottom = 16.dp)
+          .padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        options.forEach { option ->
+            val isSelected = option == selected
+            val contentColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(8.dp))
+                  .clickable { onSelected(option) }
+                  .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = optionLabel(option), style = MaterialTheme.typography.bodyLarge, color = contentColor)
+                if (isSelected) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = contentColor)
+                }
+            }
         }
-      }
     }
-  }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun SelectionBottomSheetContentPreview() {
-  UsbSerialTerminalTheme {
-    SelectionBottomSheetContent(
-      title = "Select an option",
-      options = listOf("First", "Second", "Third"),
-      optionLabel = { it },
-      selected = "Second",
-      onSelected = {},
-    )
-  }
+    UsbSerialTerminalTheme {
+        SelectionBottomSheetContent(
+            title = "Select an option",
+            options = listOf("First", "Second", "Third"),
+            optionLabel = { it },
+            selected = "Second",
+            onSelected = {},
+        )
+    }
 }

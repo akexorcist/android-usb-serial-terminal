@@ -16,19 +16,20 @@ private val LightColorScheme = lightColorScheme(primary = Purple40, secondary = 
 
 @Composable
 fun UsbSerialTerminalTheme(
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  dynamicColor: Boolean = true,
-  content: @Composable () -> Unit,
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit,
 ) {
-  val colorScheme =
-    when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-        val context = LocalContext.current
-        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
-      darkTheme -> DarkColorScheme
-      else -> LightColorScheme
-    }
+    val colorScheme =
+        when {
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                val context = LocalContext.current
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            }
 
-  MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+            darkTheme -> DarkColorScheme
+            else -> LightColorScheme
+        }
+
+    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
 }

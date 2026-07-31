@@ -20,51 +20,51 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class DeviceListUiState(
-  val devices: List<UsbDeviceInfo> = emptyList(),
-  val config: SerialConfig = SerialConfig(),
-  val connectingDeviceId: Int? = null,
+    val devices: List<UsbDeviceInfo> = emptyList(),
+    val config: SerialConfig = SerialConfig(),
+    val connectingDeviceId: Int? = null,
 )
 
 sealed interface DeviceListEvent {
-  data object NavigateToTerminal : DeviceListEvent
+    data object NavigateToTerminal : DeviceListEvent
 
-  data class ShowError(val message: String) : DeviceListEvent
+    data class ShowError(val message: String) : DeviceListEvent
 }
 
 class DeviceListViewModel(private val repository: SerialRepository) : ViewModel() {
 
-  private val config = MutableStateFlow(SerialConfig())
-  private val connectingDeviceId = MutableStateFlow<Int?>(null)
+    private val config = MutableStateFlow(SerialConfig())
+    private val connectingDeviceId = MutableStateFlow<Int?>(null)
 
-  private val eventsChannel = Channel<DeviceListEvent>(Channel.BUFFERED)
-  val events: Flow<DeviceListEvent> = eventsChannel.receiveAsFlow()
+    private val eventsChannel = Channel<DeviceListEvent>(Channel.BUFFERED)
+    val events: Flow<DeviceListEvent> = eventsChannel.receiveAsFlow()
 
-  val uiState: StateFlow<DeviceListUiState> =
-    combine(repository.observeDevices(), config, connectingDeviceId) { devices, config, connectingDeviceId ->
-        DeviceListUiState(devices = devices, config = config, connectingDeviceId = connectingDeviceId)
-      }
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DeviceListUiState())
+    val uiState: StateFlow<DeviceListUiState> =
+        combine(repository.observeDevices(), config, connectingDeviceId) { devices, config, connectingDeviceId ->
+            DeviceListUiState(devices = devices, config = config, connectingDeviceId = connectingDeviceId)
+        }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DeviceListUiState())
 
-  fun updateBaudRate(baudRate: BaudRate) {
-    config.update { it.copy(baudRate = baudRate) }
-  }
-
-  fun updateFraming(framing: DataFraming) {
-    config.update { it.copy(framing = framing) }
-  }
-
-  fun connect(device: UsbDeviceInfo) {
-    if (connectingDeviceId.value != null) return
-    connectingDeviceId.value = device.deviceId
-    viewModelScope.launch {
-      try {
-        repository.connect(device, config.value)
-        eventsChannel.send(DeviceListEvent.NavigateToTerminal)
-      } catch (e: SerialConnectionException) {
-        eventsChannel.send(DeviceListEvent.ShowError(e.message ?: "Connection failed"))
-      } finally {
-        connectingDeviceId.value = null
-      }
+    fun updateBaudRate(baudRate: BaudRate) {
+        config.update { it.copy(baudRate = baudRate) }
     }
-  }
+
+    fun updateFraming(framing: DataFraming) {
+        config.update { it.copy(framing = framing) }
+    }
+
+    fun connect(device: UsbDeviceInfo) {
+        if (connectingDeviceId.value != null) return
+        connectingDeviceId.value = device.deviceId
+        viewModelScope.launch {
+            try {
+                repository.connect(device, config.value)
+                eventsChannel.send(DeviceListEvent.NavigateToTerminal)
+            } catch (e: SerialConnectionException) {
+                eventsChannel.send(DeviceListEvent.ShowError(e.message ?: "Connection failed"))
+            } finally {
+                connectingDeviceId.value = null
+            }
+        }
+    }
 }
