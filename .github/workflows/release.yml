@@ -57,8 +57,6 @@ jobs:
           packageName: dev.akexorcist.terminal.usbspp
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: alpha
-          # TODO: remove once the app has had its first manual rollout in Play
-          # Console (a draft app only accepts draft releases via the API).
           status: draft
 
       - name: Create GitHub Release
