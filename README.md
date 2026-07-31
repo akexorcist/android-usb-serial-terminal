@@ -2,6 +2,8 @@
 
 Android app for communicating with USB serial devices over USB Host mode.
 
+![image_001.png](image/image_001.png)
+
 ## Requirements
 
 - Android 8.0 (API 26) or higher
