@@ -1,11 +1,21 @@
 @file:Suppress("AvoidDuplicateDependencies")
 
 import java.time.Duration
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val releaseVersionName: String? = System.getenv("RELEASE_VERSION_NAME")
+val releaseRunNumber: String? = System.getenv("GITHUB_RUN_NUMBER")
+
+if (releaseVersionName != null) {
+    require(Regex("""^\d+\.\d+\.\d+$""").matches(releaseVersionName)) {
+        "RELEASE_VERSION_NAME must be in X.Y.Z format, got: $releaseVersionName"
+    }
 }
 
 android {
@@ -15,14 +25,32 @@ android {
         applicationId = "dev.akexorcist.terminal.usbspp"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseRunNumber?.toInt() ?: 1
+        versionName = releaseVersionName ?: "1.0"
+    }
+
+    val keystoreProperties = Properties()
+    val keystorePropertiesFile = rootProject.file("local.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(keystorePropertiesFile.inputStream())
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(keystoreProperties.getProperty("keystore_path", "release.keystore"))
+            storePassword = keystoreProperties.getProperty("keystore_password", "")
+            keyAlias = keystoreProperties.getProperty("keystore_key_alias", "")
+            keyPassword = keystoreProperties.getProperty("keystore_key_password", "")
+            enableV3Signing = true
+            enableV4Signing = true
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
