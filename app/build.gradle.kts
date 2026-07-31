@@ -1,3 +1,5 @@
+@file:Suppress("AvoidDuplicateDependencies")
+
 import java.time.Duration
 
 plugins {
