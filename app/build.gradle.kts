@@ -1,3 +1,5 @@
+import java.time.Duration
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -24,6 +26,14 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    testOptions {
+        unitTests {
+            // Without this, SerialInputOutputManager's unstubbed Process.setThreadPriority() call
+            // throws and is swallowed, so its startup latch never counts down and start() hangs.
+            isReturnDefaultValues = true
+            all { test -> test.timeout.set(Duration.ofSeconds(30)) }
+        }
     }
     buildFeatures {
       compose = true
@@ -71,6 +81,9 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.kotest.assertions.core)
+  testImplementation(libs.turbine)
+  testImplementation(libs.mockk)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
@@ -91,4 +104,7 @@ dependencies {
 
   // USB serial communication
   implementation(libs.usb.serial.android)
+
+  // Date and time
+  implementation(libs.kotlinx.datetime)
 }

@@ -1,80 +1,167 @@
 package dev.akexorcist.terminal.usbspp.ui.devicelist
 
+import app.cash.turbine.test
 import dev.akexorcist.terminal.usbspp.MainDispatcherRule
+import dev.akexorcist.terminal.usbspp.data.SerialRepository
+import dev.akexorcist.terminal.usbspp.data.UsbSerialRepositoryImpl
 import dev.akexorcist.terminal.usbspp.domain.BaudRate
 import dev.akexorcist.terminal.usbspp.domain.DataFraming
-import dev.akexorcist.terminal.usbspp.domain.SerialConnectionException
-import dev.akexorcist.terminal.usbspp.fake.FakeSerialRepository
-import dev.akexorcist.terminal.usbspp.fake.fakeDevice
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import dev.akexorcist.terminal.usbspp.fake.FakeUsbDataSource
+import dev.akexorcist.terminal.usbspp.fake.fakeUsbConnection
+import dev.akexorcist.terminal.usbspp.fake.fakeUsbDeviceConnection
+import io.kotest.matchers.shouldBe
+import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DeviceListViewModelTest {
 
-  @get:Rule val mainDispatcherRule = MainDispatcherRule()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-  private lateinit var repository: FakeSerialRepository
-  private lateinit var viewModel: DeviceListViewModel
+    private lateinit var dataSource: FakeUsbDataSource
+    private lateinit var repository: SerialRepository
+    private lateinit var viewModel: DeviceListViewModel
 
-  @Before
-  fun setup() {
-    repository = FakeSerialRepository()
-    viewModel = DeviceListViewModel(repository)
-  }
+    @Before
+    fun setup() {
+        dataSource = FakeUsbDataSource()
+        repository = UsbSerialRepositoryImpl(dataSource)
+        viewModel = DeviceListViewModel(repository)
+    }
 
-  @Test
-  fun `uiState reflects devices published by the repository`() = runTest {
-    val collected = mutableListOf<DeviceListUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+    @After
+    fun tearDown() {
+        repository.disconnect()
+    }
 
-    val device = fakeDevice(deviceId = 1)
-    repository.setDevices(listOf(device))
+    @Test
+    fun `uiState reflects devices published by the repository`() = runTest {
+        viewModel.uiState.test {
+            awaitItem().devices shouldBe emptyList()
 
-    assertEquals(listOf(device), viewModel.uiState.value.devices)
-  }
+            val connection = fakeUsbConnection(deviceId = 1)
+            dataSource.drivers = listOf(connection.driver)
+            dataSource.emitDeviceChange()
 
-  @Test
-  fun `updateBaudRate and updateFraming update the selected config`() = runTest {
-    val collected = mutableListOf<DeviceListUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+            awaitItem().devices shouldBe listOf(connection.deviceInfo)
+        }
+    }
 
-    viewModel.updateBaudRate(BaudRate.BAUD_115200)
-    viewModel.updateFraming(DataFraming.SEVEN_E_1)
+    @Test
+    fun `updateBaudRate and updateFraming update the selected config`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-    assertEquals(BaudRate.BAUD_115200, viewModel.uiState.value.config.baudRate)
-    assertEquals(DataFraming.SEVEN_E_1, viewModel.uiState.value.config.framing)
-  }
+            viewModel.updateBaudRate(BaudRate.BAUD_115200)
+            awaitItem().config.baudRate shouldBe BaudRate.BAUD_115200
 
-  @Test
-  fun `connect success emits NavigateToTerminal and clears connecting state`() = runTest {
-    val events = mutableListOf<DeviceListEvent>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events.add(it) } }
+            viewModel.updateFraming(DataFraming.SEVEN_E_1)
+            awaitItem().config.framing shouldBe DataFraming.SEVEN_E_1
+        }
+    }
 
-    val device = fakeDevice(deviceId = 1)
-    viewModel.connect(device)
+    @Test
+    fun `connect success emits NavigateToTerminal and clears connecting state`() = runTest {
+        val connection = fakeUsbConnection(deviceId = 1)
+        dataSource.deviceConnection = fakeUsbDeviceConnection()
 
-    assertEquals(listOf<DeviceListEvent>(DeviceListEvent.NavigateToTerminal), events)
-    assertNull(viewModel.uiState.value.connectingDeviceId)
-  }
+        viewModel.uiState.test {
+            awaitItem().connectingDeviceId shouldBe null
 
-  @Test
-  fun `connect failure emits ShowError and clears connecting state`() = runTest {
-    repository.connectException = SerialConnectionException("USB permission denied")
-    val events = mutableListOf<DeviceListEvent>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events.add(it) } }
+            viewModel.events.test {
+                viewModel.connect(connection.deviceInfo)
 
-    val device = fakeDevice(deviceId = 1)
-    viewModel.connect(device)
+                awaitItem() shouldBe DeviceListEvent.NavigateToTerminal
+            }
 
-    assertEquals(listOf<DeviceListEvent>(DeviceListEvent.ShowError("USB permission denied")), events)
-    assertNull(viewModel.uiState.value.connectingDeviceId)
-  }
+            awaitItem().connectingDeviceId shouldBe 1
+            awaitItem().connectingDeviceId shouldBe null
+        }
+    }
+
+    @Test
+    fun `connect failure via denied permission emits ShowError and clears connecting state`() = runTest {
+        dataSource.permissionGranted = false
+        val connection = fakeUsbConnection(deviceId = 1)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.events.test {
+                viewModel.connect(connection.deviceInfo)
+
+                awaitItem() shouldBe DeviceListEvent.ShowError("USB permission denied")
+            }
+
+            awaitItem().connectingDeviceId shouldBe 1
+            awaitItem().connectingDeviceId shouldBe null
+        }
+    }
+
+    @Test
+    fun `connect failure when the device connection cannot be opened emits ShowError and clears connecting state`() = runTest {
+        dataSource.deviceConnection = null
+        val connection = fakeUsbConnection(deviceId = 1)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.events.test {
+                viewModel.connect(connection.deviceInfo)
+
+                awaitItem() shouldBe DeviceListEvent.ShowError("Unable to open device connection")
+            }
+
+            awaitItem().connectingDeviceId shouldBe 1
+            awaitItem().connectingDeviceId shouldBe null
+        }
+    }
+
+    @Test
+    fun `connect failure when the port cannot be opened emits ShowError and clears connecting state`() = runTest {
+        dataSource.deviceConnection = fakeUsbDeviceConnection()
+        val connection = fakeUsbConnection(deviceId = 1)
+        connection.port.openException = IOException("Port busy")
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.events.test {
+                viewModel.connect(connection.deviceInfo)
+
+                awaitItem() shouldBe DeviceListEvent.ShowError("Port busy")
+            }
+
+            awaitItem().connectingDeviceId shouldBe 1
+            awaitItem().connectingDeviceId shouldBe null
+        }
+    }
+
+    @Test
+    fun `a second connect while one is already in flight is a no-op`() = runTest {
+        val inFlight = CompletableDeferred<Boolean>()
+        dataSource.permissionGranted = false
+        dataSource.requestPermissionDelegate = { inFlight.await() }
+
+        val first = fakeUsbConnection(deviceId = 1)
+        val second = fakeUsbConnection(deviceId = 2)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.connect(first.deviceInfo)
+            awaitItem().connectingDeviceId shouldBe 1
+
+            viewModel.connect(second.deviceInfo)
+            viewModel.uiState.value.connectingDeviceId shouldBe 1
+
+            inFlight.complete(false)
+            awaitItem().connectingDeviceId shouldBe null
+        }
+    }
 }

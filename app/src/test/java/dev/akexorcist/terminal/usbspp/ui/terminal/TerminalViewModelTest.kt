@@ -1,131 +1,238 @@
 package dev.akexorcist.terminal.usbspp.ui.terminal
 
+import app.cash.turbine.test
 import dev.akexorcist.terminal.usbspp.MainDispatcherRule
+import dev.akexorcist.terminal.usbspp.data.SerialRepository
+import dev.akexorcist.terminal.usbspp.data.UsbSerialRepositoryImpl
+import dev.akexorcist.terminal.usbspp.domain.ConnectionState
 import dev.akexorcist.terminal.usbspp.domain.LineDirection
 import dev.akexorcist.terminal.usbspp.domain.LineEnding
-import dev.akexorcist.terminal.usbspp.domain.SerialIoException
-import dev.akexorcist.terminal.usbspp.domain.SerialLine
-import dev.akexorcist.terminal.usbspp.fake.FakeSerialRepository
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import dev.akexorcist.terminal.usbspp.domain.SerialConfig
+import dev.akexorcist.terminal.usbspp.fake.FakeUsbDataSource
+import dev.akexorcist.terminal.usbspp.fake.FakeUsbSerialPort
+import dev.akexorcist.terminal.usbspp.fake.fakeUsbConnection
+import dev.akexorcist.terminal.usbspp.fake.fakeUsbDeviceConnection
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.shouldBe
+import java.io.IOException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class TerminalViewModelTest {
 
-  @get:Rule val mainDispatcherRule = MainDispatcherRule()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
-  private lateinit var repository: FakeSerialRepository
-  private lateinit var viewModel: TerminalViewModel
+    private lateinit var dataSource: FakeUsbDataSource
+    private lateinit var repository: SerialRepository
+    private lateinit var viewModel: TerminalViewModel
+    private lateinit var port: FakeUsbSerialPort
 
-  @Before
-  fun setup() {
-    repository = FakeSerialRepository()
-    viewModel = TerminalViewModel(repository)
-  }
+    @Before
+    fun setup() {
+        dataSource = FakeUsbDataSource()
+        dataSource.deviceConnection = fakeUsbDeviceConnection()
+        repository = UsbSerialRepositoryImpl(dataSource)
 
-  @Test
-  fun `incoming lines from the repository are appended to uiState`() = runTest {
-    val collected = mutableListOf<TerminalUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+        val connection = fakeUsbConnection(deviceId = 1)
+        port = connection.port
+        runBlocking { repository.connect(connection.deviceInfo, SerialConfig()) }
 
-    val line =
-      SerialLine(id = 1L, text = "hello", bytes = "hello".toByteArray().toList(), direction = LineDirection.RECEIVED, timestampMillis = 1L)
-    repository.emitIncomingLine(line)
+        viewModel = TerminalViewModel(repository)
+    }
 
-    assertEquals(listOf(line), viewModel.uiState.value.lines)
-  }
+    @After
+    fun tearDown() {
+        repository.disconnect()
+    }
 
-  @Test
-  fun `sendText success appends a sent line and records history`() = runTest {
-    val collected = mutableListOf<TerminalUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+    @Test
+    fun `incoming lines from the repository are appended to uiState`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-    viewModel.sendText("AT")
+            port.emitIncoming("hello\n".toByteArray())
 
-    assertEquals(1, viewModel.uiState.value.lines.size)
-    assertEquals(LineDirection.SENT, viewModel.uiState.value.lines.first().direction)
-    assertEquals(listOf("AT"), viewModel.uiState.value.sendHistory)
-    assertEquals(listOf("AT" to LineEnding.LF), repository.sentPayloads)
-  }
+            val state = awaitItem()
+            state.lines.size shouldBe 1
+            state.lines.first().text shouldBe "hello"
+            state.lines.first().direction shouldBe LineDirection.RECEIVED
+        }
+    }
 
-  @Test
-  fun `sendText blank input is ignored`() = runTest {
-    viewModel.sendText("   ")
+    @Test
+    fun `sendText success appends a sent line with the line ending applied and records history`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-    assertTrue(viewModel.uiState.value.lines.isEmpty())
-    assertTrue(repository.sentPayloads.isEmpty())
-  }
+            viewModel.sendText("AT")
 
-  @Test
-  fun `sendText failure emits ShowError and does not append a line`() = runTest {
-    repository.sendException = SerialIoException("Not connected")
-    val events = mutableListOf<TerminalEvent>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events.add(it) } }
+            val state = expectMostRecentItem()
+            state.lines.size shouldBe 1
+            state.lines.first().direction shouldBe LineDirection.SENT
+            state.lines.first().text shouldBe "AT"
+            state.lines.first().bytes shouldBe "AT\n".toByteArray().toList()
+            state.sendHistory shouldBe listOf("AT")
+        }
+    }
 
-    viewModel.sendText("AT")
+    @Test
+    fun `sendText appends the selected line ending to the outgoing payload`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-    assertEquals(listOf<TerminalEvent>(TerminalEvent.ShowError("Not connected")), events)
-    assertTrue(viewModel.uiState.value.lines.isEmpty())
-  }
+            viewModel.setLineEnding(LineEnding.CRLF)
+            awaitItem().lineEnding shouldBe LineEnding.CRLF
 
-  @Test
-  fun `mid-session repository errors are surfaced as ShowError events`() = runTest {
-    val events = mutableListOf<TerminalEvent>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events.add(it) } }
+            viewModel.sendText("AT")
 
-    repository.emitError("Device disconnected")
+            val state = expectMostRecentItem()
+            state.lines.first().text shouldBe "AT"
+            state.lines.first().bytes shouldBe "AT\r\n".toByteArray().toList()
+        }
+    }
 
-    assertEquals(listOf<TerminalEvent>(TerminalEvent.ShowError("Device disconnected")), events)
-  }
+    @Test
+    fun `sendText success with a repeated command moves it to the front of history instead of duplicating it`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-  @Test
-  fun `toggleHexMode flips hex display state`() = runTest {
-    val collected = mutableListOf<TerminalUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+            viewModel.sendText("AT")
+            expectMostRecentItem().sendHistory shouldBe listOf("AT")
 
-    assertEquals(false, viewModel.uiState.value.hexMode)
-    viewModel.toggleHexMode()
-    assertEquals(true, viewModel.uiState.value.hexMode)
-  }
+            viewModel.sendText("LED_ON")
+            expectMostRecentItem().sendHistory shouldBe listOf("LED_ON", "AT")
 
-  @Test
-  fun `setLineEnding updates the selected line ending`() = runTest {
-    val collected = mutableListOf<TerminalUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+            viewModel.sendText("AT")
+            val state = expectMostRecentItem()
+            state.lines.map { it.text } shouldBe listOf("AT", "LED_ON", "AT")
+            state.sendHistory shouldBe listOf("AT", "LED_ON")
+        }
+    }
 
-    viewModel.setLineEnding(LineEnding.CRLF)
+    @Test
+    fun `sendText blank input is ignored`() = runTest {
+        viewModel.sendText("   ")
 
-    assertEquals(LineEnding.CRLF, viewModel.uiState.value.lineEnding)
-  }
+        port.writtenPayloads.shouldBeEmpty()
+    }
 
-  @Test
-  fun `clearConsole empties the line buffer`() = runTest {
-    val collected = mutableListOf<TerminalUiState>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { collected.add(it) } }
+    @Test
+    fun `sendText failure emits ShowError and does not append a line`() = runTest {
+        repository.disconnect()
 
-    viewModel.sendText("AT")
-    assertTrue(viewModel.uiState.value.lines.isNotEmpty())
+        viewModel.uiState.test {
+            awaitItem()
 
-    viewModel.clearConsole()
+            viewModel.events.test {
+                viewModel.sendText("AT")
 
-    assertTrue(viewModel.uiState.value.lines.isEmpty())
-  }
+                awaitItem() shouldBe TerminalEvent.ShowError("Not connected")
+            }
 
-  @Test
-  fun `disconnect calls repository and emits NavigateBack`() = runTest {
-    val events = mutableListOf<TerminalEvent>()
-    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events.add(it) } }
+            expectNoEvents()
+        }
+    }
 
-    viewModel.disconnect()
+    @Test
+    fun `a partial line with no trailing newline is flushed as its own line when disconnected`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
 
-    assertEquals(1, repository.disconnectCallCount)
-    assertEquals(listOf<TerminalEvent>(TerminalEvent.NavigateBack), events)
-  }
+            port.emitIncoming("partial".toByteArray())
+            port.awaitIncomingDrained()
+            viewModel.disconnect()
+
+            val state = expectMostRecentItem()
+            state.lines.size shouldBe 1
+            state.lines.first().text shouldBe "partial"
+            state.lines.first().direction shouldBe LineDirection.RECEIVED
+        }
+    }
+
+    @Test
+    fun `mid-session repository errors are surfaced as ShowError events and reset connection state`() = runTest {
+        viewModel.events.test {
+            port.readException = IOException("Device disconnected")
+
+            awaitItem() shouldBe TerminalEvent.ShowError("Device disconnected")
+        }
+        repository.connectionState.value shouldBe ConnectionState.Disconnected
+    }
+
+    @Test
+    fun `toggleHexMode flips hex display state`() = runTest {
+        viewModel.uiState.test {
+            awaitItem().hexMode shouldBe false
+
+            viewModel.toggleHexMode()
+
+            awaitItem().hexMode shouldBe true
+        }
+    }
+
+    @Test
+    fun `setLineEnding updates the selected line ending`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.setLineEnding(LineEnding.CRLF)
+
+            awaitItem().lineEnding shouldBe LineEnding.CRLF
+        }
+    }
+
+    @Test
+    fun `clearConsole empties the line buffer`() = runTest {
+        viewModel.uiState.test {
+            awaitItem()
+
+            viewModel.sendText("AT")
+            expectMostRecentItem().lines.shouldNotBeEmpty()
+
+            viewModel.clearConsole()
+
+            awaitItem().lines shouldBe emptyList()
+        }
+    }
+
+    @Test
+    fun `disconnect calls repository and emits NavigateBack`() = runTest {
+        viewModel.events.test {
+            viewModel.disconnect()
+
+            awaitItem() shouldBe TerminalEvent.NavigateBack
+        }
+        repository.connectionState.value shouldBe ConnectionState.Disconnected
+    }
+
+    @Test
+    fun `appendCapped keeps every item while under the cap`() {
+        listOf(1, 2).appendCapped(3, maxSize = 5) shouldBe listOf(1, 2, 3)
+    }
+
+    @Test
+    fun `appendCapped evicts the oldest item once the cap is reached`() {
+        listOf(1, 2, 3).appendCapped(4, maxSize = 3) shouldBe listOf(2, 3, 4)
+    }
+
+    @Test
+    fun `prependDistinctCapped puts the new item first while under the cap`() {
+        listOf("a", "b").prependDistinctCapped("c", maxSize = 5) shouldBe listOf("c", "a", "b")
+    }
+
+    @Test
+    fun `prependDistinctCapped evicts the oldest item once the cap is reached`() {
+        listOf("a", "b", "c").prependDistinctCapped("d", maxSize = 3) shouldBe listOf("d", "a", "b")
+    }
+
+    @Test
+    fun `prependDistinctCapped moves a repeated item to the front instead of duplicating it`() {
+        listOf("a", "b", "c").prependDistinctCapped("b", maxSize = 5) shouldBe listOf("b", "a", "c")
+    }
 }

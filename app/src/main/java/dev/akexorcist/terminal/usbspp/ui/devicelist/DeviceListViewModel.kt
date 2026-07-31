@@ -2,11 +2,11 @@ package dev.akexorcist.terminal.usbspp.ui.devicelist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.akexorcist.terminal.usbspp.data.SerialConnectionException
+import dev.akexorcist.terminal.usbspp.data.SerialRepository
 import dev.akexorcist.terminal.usbspp.domain.BaudRate
 import dev.akexorcist.terminal.usbspp.domain.DataFraming
 import dev.akexorcist.terminal.usbspp.domain.SerialConfig
-import dev.akexorcist.terminal.usbspp.domain.SerialConnectionException
-import dev.akexorcist.terminal.usbspp.domain.SerialRepository
 import dev.akexorcist.terminal.usbspp.domain.UsbDeviceInfo
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow

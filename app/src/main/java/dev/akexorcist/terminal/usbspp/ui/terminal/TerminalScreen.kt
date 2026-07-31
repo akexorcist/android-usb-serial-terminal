@@ -80,10 +80,14 @@ import dev.akexorcist.terminal.usbspp.domain.UsbDeviceInfo
 import dev.akexorcist.terminal.usbspp.theme.UsbSerialTerminalTheme
 import dev.akexorcist.terminal.usbspp.ui.common.SelectionBottomSheet
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.MonthNames
+import kotlinx.datetime.format.Padding
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import org.koin.androidx.compose.koinViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun TerminalScreen(
@@ -510,9 +514,24 @@ private fun ConnectionState.title(): String =
 internal fun isScrolledToBottom(lastVisibleIndex: Int, totalItemsCount: Int): Boolean =
     lastVisibleIndex >= totalItemsCount - 1
 
-private val timeFormatter = SimpleDateFormat("d MMM yy, HH:mm:ss.SSS", Locale.US)
+private val timeFormatter = LocalDateTime.Format {
+    day(padding = Padding.NONE)
+    char(' ')
+    monthName(MonthNames.ENGLISH_ABBREVIATED)
+    char(' ')
+    yearTwoDigits(baseYear = 2000)
+    chars(", ")
+    hour()
+    char(':')
+    minute()
+    char(':')
+    second()
+    char('.')
+    secondFraction(3)
+}
 
-internal fun Long.toTimeLabel(): String = timeFormatter.format(Date(this))
+internal fun Long.toTimeLabel(): String =
+    timeFormatter.format(Instant.fromEpochMilliseconds(this).toLocalDateTime(TimeZone.currentSystemDefault()))
 
 internal fun List<Byte>.toHexString(): String = joinToString(" ") { "%02X".format(it) }
 
